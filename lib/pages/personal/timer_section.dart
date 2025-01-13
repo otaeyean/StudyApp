@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
-import 'dart:convert'; 
+import 'timer_controller.dart'; 
 import 'timer_detail_page.dart';
 
 class TimerSection extends StatefulWidget {
@@ -10,73 +9,51 @@ class TimerSection extends StatefulWidget {
 }
 
 class _TimerSectionState extends State<TimerSection> {
-  final Map<String, Stopwatch> _subjectTimers = {}; // 과목별 스톱워치
-  final Map<String, Duration> _subjectTotalTimes = {}; // 과목별 누적 시간
+  late TimerController _timerController;
   late Timer _timer;
+  Map<String, Duration> _subjectTimeMap = {}; //과목별 멈춘 시간을 저장
 
   @override
   void initState() {
     super.initState();
-    _loadTimers();
-    _timer = Timer.periodic(Duration(seconds: 1), _updateTimers);
-  }
-
-  // 타이머 업데이트하는 함수
-  void _updateTimers(Timer timer) {
-    setState(() {});
+    _timerController = TimerController(); // TimerController 초기화
+    _subjectTimeMap = {}; //과목별 멈춘 시간 초기화
+    _loadTimers();  
+    _timer = Timer.periodic(Duration(seconds: 1), _updateTimers);  
   }
 
   @override
   void dispose() {
-    _timer.cancel();
-    _saveTimers(); 
+    _timer.cancel(); 
+    _timerController.saveTimers(); 
     super.dispose();
   }
 
-  // 타이머 텍스트 표시
-  String _formatTime(Duration elapsed) {
-    final hours = elapsed.inHours.toString().padLeft(2, '0');
-    final minutes = (elapsed.inMinutes % 60).toString().padLeft(2, '0');
-    final seconds = (elapsed.inSeconds % 60).toString().padLeft(2, '0');
-    return '$hours:$minutes:$seconds';
+  // 타이머 설정 관련 메소드들
+  
+  void _updateTimers(Timer timer) {
+    setState(() {});
   }
 
-  // 타이머 시작, 멈춤 처리 함수 (수정 필요)
-  void _startStopTimer(String subject) {
+  void _onTimeUpdate(String subject, Duration elapsed) {
     setState(() {
-      if (_subjectTimers[subject]!.isRunning) {
-        _subjectTimers[subject]!.stop();
-        // 타이머 멈출 때 경과 시간 누적
-        _subjectTotalTimes[subject] = (_subjectTotalTimes[subject] ?? Duration()) + _subjectTimers[subject]!.elapsed;
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TimerDetailPage(
-              subject: subject,
-              stopwatch: _subjectTimers[subject]!,
-              onTimeUpdate: (elapsedTime) {
-                // 디테일 페이지에서 타이머 업데이트 후 누적 시간 반영
-                setState(() {
-                  _subjectTotalTimes[subject] = (_subjectTotalTimes[subject] ?? Duration()) + elapsedTime;
-                });
-              },
-            ),
-          ),
-        ).then((elapsedTime) {
-        });
-      }
+      _subjectTimeMap[subject] = elapsed; // 과목별 멈춘 시간 저장
     });
   }
 
-  // 새 과목 추가 함수
+  // 타이머 상태 불러오는 메소드
+  Future<void> _loadTimers() async {
+    await _timerController.loadTimers();
+    setState(() {});
+  }
+
+  // 새로운 과목 추가
   void _addSubject() {
     TextEditingController controller = TextEditingController();
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color.fromARGB(255, 255, 255, 255),
           title: const Text('새 과목 추가'),
           content: TextField(
             controller: controller,
@@ -84,20 +61,17 @@ class _TimerSectionState extends State<TimerSection> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('취소'),
             ),
             TextButton(
               onPressed: () {
                 String newSubject = controller.text.trim();
-                if (newSubject.isNotEmpty && !_subjectTimers.containsKey(newSubject)) {
+                if (newSubject.isNotEmpty && !_timerController.subjectTimers.containsKey(newSubject)) {
                   setState(() {
-                    _subjectTimers[newSubject] = Stopwatch();
-                    _subjectTotalTimes[newSubject] = Duration(); // 새로운 과목의 누적 시간 0으로 초기화함
+                    _timerController.addSubject(newSubject);
                   });
-                  _saveTimers(); 
+                  _timerController.saveTimers();
                   Navigator.pop(context);
                 }
               },
@@ -109,143 +83,158 @@ class _TimerSectionState extends State<TimerSection> {
     );
   }
 
-  // 타이머 상태 저장 함수
-  Future<void> _saveTimers() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String> subjects = _subjectTimers.keys.toList();
-    List<String> timers = [];
-    List<String> totalTimes = [];
-
-    for (var subject in subjects) {
-      timers.add(_subjectTimers[subject]!.elapsed.inSeconds.toString()); //타이머의 경과 시간 설정
-      totalTimes.add(_subjectTotalTimes[subject]!.inSeconds.toString()); 
-    }
-
-    prefs.setStringList('subjects', subjects);
-    prefs.setStringList('timers', timers);
-    prefs.setStringList('totalTimes', totalTimes);
+  // 과목 이름 수정
+  void _editSubject(String oldSubject) {
+    TextEditingController controller = TextEditingController(text: oldSubject);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('과목 이름 수정'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: '새 과목 이름을 입력하세요'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () {
+                String newSubject = controller.text.trim();
+                if (newSubject.isNotEmpty && newSubject != oldSubject && !_timerController.subjectTimers.containsKey(newSubject)) {
+                  setState(() {
+                    _timerController.renameSubject(oldSubject, newSubject);
+                  });
+                  _timerController.saveTimers();
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('수정'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  // 타이머 상태 불러오기 함수 (수정 필요 현재 누적 반영됨)
-  Future<void> _loadTimers() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String>? subjects = prefs.getStringList('subjects');
-    List<String>? timers = prefs.getStringList('timers');
-    List<String>? totalTimes = prefs.getStringList('totalTimes');
-
-    if (subjects != null && timers != null && totalTimes != null) {
-      for (int i = 0; i < subjects.length; i++) {
-        String subject = subjects[i];
-        _subjectTimers[subject] = Stopwatch();
-        
-        _subjectTimers[subject]!.start();
-        _subjectTimers[subject]!.reset();
-        
-        _subjectTimers[subject]!.start();  
-        _subjectTotalTimes[subject] = Duration(seconds: int.parse(totalTimes[i]));  
-      }
-    }
+  // 과목 삭제
+  void _deleteSubject(String subject) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('과목 삭제'),
+          content: const Text('이 과목을 삭제하시겠습니까?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _timerController.removeSubject(subject);
+                });
+                _timerController.saveTimers();
+                Navigator.pop(context);
+              },
+              child: const Text('삭제'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    Divider(thickness: 1, color: Colors.grey); 
-    Duration totalTime = _subjectTotalTimes.values.fold(Duration(), (a, b) => a + b); //누적 시간 계산
+    Duration totalTime = _subjectTimeMap.values.fold(Duration(), (a, b) => a + b);
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.white,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            Icon(
-              Icons.access_time, 
-              color: Colors.amber, 
-            ),
-            const SizedBox(width: 8), 
+            Icon(Icons.access_time, color: Colors.amber),
+            const SizedBox(width: 8),
             const Text('Timer'),
           ],
         ),
-        backgroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: _addSubject, 
+            onPressed: _addSubject,
           ),
         ],
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          color: Colors.grey[200], 
-        ),
-        child: ListView(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: ListView(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('하루 누적 시간:'),
+                Text(_timerController.formatTime(totalTime)),
+              ],
+            ),
+          ),
+          ..._timerController.subjectTimers.keys.map((subject) {
+            return ListTile(
+              title: Text(subject),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '하루 누적 시간 : ',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  IconButton(
+                    icon: Icon(
+                      _timerController.subjectTimers[subject]!.isRunning
+                          ? Icons.pause
+                          : Icons.play_arrow,
                     ),
+                    onPressed: () {
+                      setState(() {
+                        _timerController.startStopTimer(subject);
+                      });
+
+                      if (_timerController.subjectTimers[subject]!.isRunning) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TimerDetailPage(
+                              subject: subject,
+                              stopwatch: _timerController.subjectTimers[subject]!,
+                              onTimeUpdate: (elapsed) {
+                                _onTimeUpdate(subject, elapsed);
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                    },
                   ),
                   Text(
-                    _formatTime(totalTime),
-                    style: TextStyle(
-                      fontSize: 16,
-                    ),
+                    _subjectTimeMap[subject] != null
+                        ? _timerController.formatTime(_subjectTimeMap[subject]!)
+                        : _timerController.formatElapsedTime(subject),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit),
+                    onPressed: () => _editSubject(subject),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () => _deleteSubject(subject),
                   ),
                 ],
               ),
-            ),
-            ..._subjectTimers.keys.map((subject) {
-              return ListTile(
-                title: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(subject),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            _subjectTimers[subject]!.isRunning
-                                ? Icons.stop
-                                : Icons.play_arrow,
-                          ),
-                          onPressed: () => _startStopTimer(subject),
-                        ),
-                        Text(_formatTime(_subjectTimers[subject]!.elapsed)),
-                      ],
-                    ),
-                  ],
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () {
-                        setState(() {
-                          _subjectTimers.remove(subject);
-                          _subjectTotalTimes.remove(subject);
-                        });
-                        _saveTimers(); 
-                      },
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ],
-        ),
+            );
+          }).toList(),
+        ],
       ),
-      backgroundColor: const Color.fromARGB(255, 255, 255, 255),
+      backgroundColor: Colors.white,
     );
   }
 }

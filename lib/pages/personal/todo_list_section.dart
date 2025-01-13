@@ -14,40 +14,44 @@ class _TodoListSectionState extends State<TodoListSection> with TickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 0, vsync: this);
-    _loadData(); // 데이터 로드 호출
+    _loadData();
   }
 
   @override
-  void dispose() {
-    _saveData(); 
-    _tabController.dispose();
-    super.dispose();
+Future<void> _loadData() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  String? data = prefs.getString('subjectTodos');
+  if (data != null) {
+    setState(() {
+      _subjectTodos = Map<String, List<Map<String, dynamic>>>.from(
+        json.decode(data).map((key, value) {
+          return MapEntry(
+            key,
+            List<Map<String, dynamic>>.from(
+                value.map((item) => Map<String, dynamic>.from(item))),
+          );
+        }),
+      );
+    });
+  } else {
+    print('No data found!');
   }
 
-  // 데이터 로드 함수
-  Future<void> _loadData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? data = prefs.getString('subjectTodos');
-    if (data != null) {
-      setState(() {
-        _subjectTodos = Map<String, List<Map<String, dynamic>>>.from(
-          json.decode(data).map((key, value) {
-            return MapEntry(
-              key,
-              List<Map<String, dynamic>>.from(value.map((item) => Map<String, dynamic>.from(item))),
-            );
-          }),
-        );
-        _tabController = TabController(
-          length: _subjectTodos.keys.length,
-          vsync: this,
-        );
-      });
-    } else {
-      print('No data found!');
-    }
-  }
+  // Ensure _tabController is updated after loading data
+  setState(() {
+    _tabController = TabController(
+      length: _subjectTodos.keys.length,
+      vsync: this,
+    );
+  });
+}
+
+@override
+void dispose() {
+  _saveData();
+  _tabController.dispose();
+  super.dispose();
+}
 
 // 데이터 저장 
 Future<void> _saveData() async {
