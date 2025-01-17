@@ -48,13 +48,14 @@ void startStopTimer(String subject) {
       _subjectTotalTimes[newSubject] = _subjectTotalTimes.remove(oldSubject)!;
     }
   }
+// 과목 삭제
+void removeSubject(String subject) {
+  _subjectTimers.remove(subject);
+  _subjectTotalTimes.remove(subject);
+  saveTimers(); // 과목 삭제 시 즉시 저장
+}
 
-  // 과목 삭제
-  void removeSubject(String subject) {
-    _subjectTimers.remove(subject);
-    _subjectTotalTimes.remove(subject);
-  }
-//데이터 저장장
+// 데이터 저장
 Future<void> saveTimers() async {
   print("saveTimers called");
   SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -67,11 +68,9 @@ Future<void> saveTimers() async {
   String today = DateTime.now().toIso8601String().split('T').first;
 
   // 현재 날짜의 데이터를 가져오거나 초기화
-  Map<String, int> todayData = data[today] != null
-      ? Map<String, int>.from(data[today])
-      : {};
+  Map<String, int> todayData = {};
 
-  // 현재 시간을 업데이트
+  // 현재 메모리 상태를 기반으로 데이터 업데이트
   _subjectTimers.forEach((subject, timer) {
     int totalTime = (_subjectTotalTimes[subject]?.inSeconds ?? 0) +
         (timer.isRunning ? timer.elapsed.inSeconds : 0);
@@ -79,13 +78,15 @@ Future<void> saveTimers() async {
     print("Saving $subject: $totalTime seconds");
   });
 
-  // 업데이트된 데이터를 다시 저장
+  // 삭제된 과목 반영: 현재 메모리 상태에 없는 과목은 제거
   data[today] = todayData;
+
+  // 업데이트된 데이터를 SharedPreferences에 저장
   await prefs.setString('timersData', jsonEncode(data));
 
-  // 저장된 데이터 로그 출력
   print("Data saved: $data");
 }
+
 
 
 

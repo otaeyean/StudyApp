@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'timer_controller.dart'; 
 import 'timer_detail_page.dart';
@@ -120,33 +121,41 @@ class _TimerSectionState extends State<TimerSection> {
   }
 
   // 과목 삭제
-  void _deleteSubject(String subject) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('과목 삭제'),
-          content: const Text('이 과목을 삭제하시겠습니까?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _timerController.removeSubject(subject);
-                });
-                _timerController.saveTimers();
-                Navigator.pop(context);
-              },
-              child: const Text('삭제'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+void _deleteSubject(String subject) {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('과목 삭제'),
+        content: const Text('이 과목을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () async {
+              setState(() {
+                _timerController.removeSubject(subject); // 타이머 데이터에서 과목 삭제
+              });
+
+              // SharedPreferences에서 데이터 삭제
+              SharedPreferences prefs = await SharedPreferences.getInstance();
+              await _timerController.saveTimers(); // 저장 데이터 업데이트
+              print('Deleted subject: $subject');
+
+              Navigator.pop(context);
+            },
+            child: const Text('삭제'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
