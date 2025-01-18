@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // 로케일 관련 패키지 추가
 import 'pages/home/home_page.dart';
 import 'pages/personal/personal_page.dart';
 import 'pages/group/group_page.dart';
@@ -17,6 +18,16 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue, // 기본 테마 색상
         scaffoldBackgroundColor: Colors.white, // 기본 배경 흰색
       ),
+      // 한국어 로케일 설정
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: [
+        const Locale('ko', ''), // 한국어 로케일 추가
+        // 다른 로케일을 추가할 수 있음
+      ],
       home: MainPage(),
     );
   }

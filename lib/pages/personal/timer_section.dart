@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'timer_controller.dart'; 
 import 'timer_detail_page.dart';
@@ -120,37 +121,55 @@ class _TimerSectionState extends State<TimerSection> {
   }
 
   // 과목 삭제
-  void _deleteSubject(String subject) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('과목 삭제'),
-          content: const Text('이 과목을 삭제하시겠습니까?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _timerController.removeSubject(subject);
-                });
-                _timerController.saveTimers();
-                Navigator.pop(context);
-              },
-              child: const Text('삭제'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+void _deleteSubject(String subject) {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('과목 삭제'),
+        content: const Text('이 과목을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () async {
+              setState(() {
+                _timerController.removeSubject(subject); // 타이머 데이터에서 과목 삭제
+              });
+
+              // SharedPreferences에서 데이터 삭제
+              SharedPreferences prefs = await SharedPreferences.getInstance();
+              await _timerController.saveTimers(); // 저장 데이터 업데이트
+              print('Deleted subject: $subject');
+
+              Navigator.pop(context);
+            },
+            child: const Text('삭제'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
-    Duration totalTime = _subjectTimeMap.values.fold(Duration(), (a, b) => a + b);
+   Duration totalTime = _timerController.subjectTimers.entries.fold(
+  Duration(),
+  (sum, entry) {
+    String subject = entry.key;
+    Stopwatch timer = entry.value;
+    return sum +
+        (timer.isRunning
+            ? timer.elapsed + (_timerController.subjectTotalTimes[subject] ?? Duration())
+            : (_timerController.subjectTotalTimes[subject] ?? Duration()));
+  },
+);
 
     return Scaffold(
       appBar: AppBar(
@@ -188,33 +207,36 @@ class _TimerSectionState extends State<TimerSection> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    icon: Icon(
-                      _timerController.subjectTimers[subject]!.isRunning
-                          ? Icons.pause
-                          : Icons.play_arrow,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _timerController.startStopTimer(subject);
-                      });
+                IconButton(
+  icon: Icon(
+    _timerController.subjectTimers[subject]!.isRunning
+        ? Icons.pause
+        : Icons.play_arrow,
+  ),
+  onPressed: () {
+    setState(() {
+      _timerController.startStopTimer(subject);
+      _timerController.saveTimers(); // 상태 저장 추가
+    });
 
-                      if (_timerController.subjectTimers[subject]!.isRunning) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => TimerDetailPage(
-                              subject: subject,
-                              stopwatch: _timerController.subjectTimers[subject]!,
-                              onTimeUpdate: (elapsed) {
-                                _onTimeUpdate(subject, elapsed);
-                              },
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
+    if (_timerController.subjectTimers[subject]!.isRunning) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TimerDetailPage(
+            subject: subject,
+            stopwatch: _timerController.subjectTimers[subject]!,
+            onTimeUpdate: (elapsed) {
+              _onTimeUpdate(subject, elapsed);
+            },
+            timerController: _timerController,
+          ),
+        ),
+      );
+    }
+  },
+),
+
                   Text(
                     _subjectTimeMap[subject] != null
                         ? _timerController.formatTime(_subjectTimeMap[subject]!)
@@ -237,4 +259,4 @@ class _TimerSectionState extends State<TimerSection> {
       backgroundColor: Colors.white,
     );
   }
-}
+} 
