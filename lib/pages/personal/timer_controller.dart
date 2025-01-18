@@ -1,4 +1,4 @@
- import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,7 +7,7 @@ class TimerController {
   final Map<String, Duration> _subjectTotalTimes = {}; // 과목별 누적 시간
   Map<String, Map<String, int>> _timersData = {}; // 저장된 데이터를 캐싱
 
-
+  Function? onDataChange; // 데이터 변경 이벤트 콜백
 
   // 저장된 타이머 데이터를 반환
   Future<Map<String, Map<String, int>>> getTimersData() async {
@@ -25,32 +25,30 @@ class TimerController {
 
     return {}; // 데이터가 없으면 빈 맵 반환
   }
+
   // 타이머 시작 및 멈춤 처리
-void startStopTimer(String subject) {
-  if (!_subjectTimers.containsKey(subject)) {
-    _subjectTimers[subject] = Stopwatch();
+  void startStopTimer(String subject) {
+    if (!_subjectTimers.containsKey(subject)) {
+      _subjectTimers[subject] = Stopwatch();
+    }
+    if (!_subjectTotalTimes.containsKey(subject)) {
+      _subjectTotalTimes[subject] = Duration();
+    }
+
+    if (_subjectTimers[subject]!.isRunning) {
+      // 타이머를 멈추고 누적 시간을 업데이트
+      _subjectTimers[subject]!.stop();
+      _subjectTotalTimes[subject] =
+          _subjectTotalTimes[subject]! + _subjectTimers[subject]!.elapsed;
+      _subjectTimers[subject]!.reset();
+      print("Updated total time for $subject: ${_subjectTotalTimes[subject]}");
+      saveTimers(); // 저장 호출 추가
+    } else {
+      // 타이머를 시작
+      _subjectTimers[subject]!.start();
+      print("Timer started for $subject");
+    }
   }
-  if (!_subjectTotalTimes.containsKey(subject)) {
-    _subjectTotalTimes[subject] = Duration();
-  }
-
-  if (_subjectTimers[subject]!.isRunning) {
-    // 타이머를 멈추고 누적 시간을 업데이트
-    _subjectTimers[subject]!.stop();
-    _subjectTotalTimes[subject] =
-        _subjectTotalTimes[subject]! + _subjectTimers[subject]!.elapsed;
-    _subjectTimers[subject]!.reset();
-    print("Updated total time for $subject: ${_subjectTotalTimes[subject]}");
-    saveTimers(); // 저장 호출 추가
-  } else {
-    // 타이머를 시작
-    _subjectTimers[subject]!.start();
-    print("Timer started for $subject");
-  }
-}
-
-
-
 
   // 과목 추가
   void addSubject(String subject) {
@@ -67,48 +65,50 @@ void startStopTimer(String subject) {
       _subjectTotalTimes[newSubject] = _subjectTotalTimes.remove(oldSubject)!;
     }
   }
-// 과목 삭제
-void removeSubject(String subject) {
-  _subjectTimers.remove(subject);
-  _subjectTotalTimes.remove(subject);
-  saveTimers(); // 과목 삭제 시 즉시 저장
-}
 
-// 데이터 저장
-Future<void> saveTimers() async {
-  print("saveTimers called");
-  SharedPreferences prefs = await SharedPreferences.getInstance();
+  // 과목 삭제
+  void removeSubject(String subject) {
+    _subjectTimers.remove(subject);
+    _subjectTotalTimes.remove(subject);
+    saveTimers(); // 과목 삭제 시 즉시 저장
+  }
 
-  // 기존 데이터 로드
-  String? savedData = prefs.getString('timersData');
-  Map<String, dynamic> data = savedData != null ? jsonDecode(savedData) : {};
+  // 데이터 저장
+  Future<void> saveTimers() async {
+    print("saveTimers called");
+    SharedPreferences prefs = await SharedPreferences.getInstance();
 
-  // 현재 날짜
-  String today = DateTime.now().toIso8601String().split('T').first;
+    // 기존 데이터 로드
+    String? savedData = prefs.getString('timersData');
+    Map<String, dynamic> data = savedData != null ? jsonDecode(savedData) : {};
 
-  // 현재 날짜의 데이터를 가져오거나 초기화
-  Map<String, int> todayData = {};
+    // 현재 날짜
+    String today = DateTime.now().toIso8601String().split('T').first;
 
-  // 현재 메모리 상태를 기반으로 데이터 업데이트
-  _subjectTimers.forEach((subject, timer) {
-    int totalTime = (_subjectTotalTimes[subject]?.inSeconds ?? 0) +
-        (timer.isRunning ? timer.elapsed.inSeconds : 0);
-    todayData[subject] = totalTime;
-    print("Saving $subject: $totalTime seconds");
-  });
+    // 현재 날짜의 데이터를 가져오거나 초기화
+    Map<String, int> todayData = {};
 
-  // 삭제된 과목 반영: 현재 메모리 상태에 없는 과목은 제거
-  data[today] = todayData;
+    // 현재 메모리 상태를 기반으로 데이터 업데이트
+    _subjectTimers.forEach((subject, timer) {
+      int totalTime = (_subjectTotalTimes[subject]?.inSeconds ?? 0) +
+          (timer.isRunning ? timer.elapsed.inSeconds : 0);
+      todayData[subject] = totalTime;
+      print("Saving $subject: $totalTime seconds");
+    });
 
-  // 업데이트된 데이터를 SharedPreferences에 저장
-  await prefs.setString('timersData', jsonEncode(data));
+    // 삭제된 과목 반영: 현재 메모리 상태에 없는 과목은 제거
+    data[today] = todayData;
 
-  print("Data saved: $data");
-}
+    // 업데이트된 데이터를 SharedPreferences에 저장
+    await prefs.setString('timersData', jsonEncode(data));
 
+    print("Data saved: $data");
 
-
-
+    // 데이터 변경 이벤트 호출
+    if (onDataChange != null) {
+      onDataChange!();
+    }
+  }
 
   // 데이터 불러오기
   Future<void> loadTimers() async {
@@ -127,7 +127,7 @@ Future<void> saveTimers() async {
           _subjectTimers[subject] = Stopwatch();
           _subjectTotalTimes[subject] = Duration(seconds: totalSeconds);
         });
-      print("Timers loaded for today: $todayData");
+        print("Timers loaded for today: $todayData");
       }
     }
   }
