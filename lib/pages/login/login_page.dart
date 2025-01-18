@@ -27,7 +27,6 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    // 로그인 성공 메시지만 표시 실제로 작동되는 거 아님
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('로그인 성공')),
     );
@@ -132,4 +131,4 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
-}
+} 
