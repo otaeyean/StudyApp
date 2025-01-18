@@ -1,11 +1,30 @@
-import 'dart:async';
+ import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TimerController {
   final Map<String, Stopwatch> _subjectTimers = {}; // 과목별 스톱워치
   final Map<String, Duration> _subjectTotalTimes = {}; // 과목별 누적 시간
+  Map<String, Map<String, int>> _timersData = {}; // 저장된 데이터를 캐싱
 
+
+
+  // 저장된 타이머 데이터를 반환
+  Future<Map<String, Map<String, int>>> getTimersData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? savedData = prefs.getString('timersData');
+
+    if (savedData != null) {
+      return Map<String, Map<String, int>>.from(
+        jsonDecode(savedData).map((date, subjects) => MapEntry(
+          date,
+          Map<String, int>.from(subjects),
+        )),
+      );
+    }
+
+    return {}; // 데이터가 없으면 빈 맵 반환
+  }
   // 타이머 시작 및 멈춤 처리
 void startStopTimer(String subject) {
   if (!_subjectTimers.containsKey(subject)) {
@@ -145,4 +164,4 @@ Future<void> saveTimers() async {
       print("저장된 데이터가 없습니다.");
     }
   }
-} 
+}
